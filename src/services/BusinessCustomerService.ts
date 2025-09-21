@@ -26,6 +26,7 @@ export class BusinessCustomerService {
   async delete(id: string): Promise<boolean> {
     const url = `${this.baseUrl}/${id}`;
     const response = await apiFetch(url, { method: "DELETE" });
-    return response.ok;
+    console.log("delete response:", response);
+    return response.success || false;
   }
 }

@@ -8,7 +8,10 @@ export class RouterConfig {
     const businessCustomerController = new BusinessCustomerRoutes();
 
     app.use("/business-customers", businessCustomerController.getRouter());
+
+    // Event-driven Products Routes - Saubere Architektur ohne direkte Service-Kopplung
     app.use("/products", new ProductsRoutes().router);
+
     app.use("/inventory", new InventoryRoutes().router);
 
     // Additional routes can be registered here

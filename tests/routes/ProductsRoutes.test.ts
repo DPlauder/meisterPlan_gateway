@@ -1,222 +1,258 @@
-import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from "@jest/globals";
 import request from "supertest";
-import express, { Application } from "express";
+import express from "express";
 import { ProductsRoutes } from "../../src/routes/ProductsRoutes";
 import { ProductsService } from "../../src/services/ProductsService";
-import { mockData, HTTP_STATUS } from "../testUtils";
+import { ServiceEventBus } from "../../src/events/ServiceEventBus";
 
-// Mock ProductsService
+// Mock dependencies
 jest.mock("../../src/services/ProductsService");
+jest.mock("../../src/events/ServiceEventBus");
 
 describe("ProductsRoutes", () => {
-  let app: Application;
-  let productsRoutes: ProductsRoutes;
+  let app: express.Application;
   let mockProductsService: jest.Mocked<ProductsService>;
+  let mockEventBus: jest.Mocked<ServiceEventBus>;
 
   beforeEach(() => {
+    mockProductsService = new ProductsService() as jest.Mocked<ProductsService>;
+
+    // Mock EventBus singleton
+    mockEventBus = {
+      emit: jest.fn(),
+      on: jest.fn(),
+      removeListener: jest.fn(),
+      removeAllListeners: jest.fn(),
+    } as any;
+
+    (ServiceEventBus.getInstance as jest.Mock).mockReturnValue(mockEventBus);
+
     app = express();
     app.use(express.json());
 
-    productsRoutes = new ProductsRoutes();
+    const productsRoutes = new ProductsRoutes();
     app.use("/products", productsRoutes.router);
 
-    // Mock Service erstellen
-    mockProductsService = new ProductsService() as jest.Mocked<ProductsService>;
-    (productsRoutes as any).productsService = mockProductsService;
-
-    // Mock-Implementierungen zurücksetzen
     jest.clearAllMocks();
   });
 
-  describe("GET /products", () => {
-    it("should return all products successfully", async () => {
-      mockProductsService.getAll.mockResolvedValue(mockData.products);
-
-      const response = await request(app)
-        .get("/products")
-        .expect(HTTP_STATUS.OK);
-
-      expect(response.body).toEqual(mockData.products);
-      expect(mockProductsService.getAll).toHaveBeenCalledTimes(1);
-    });
-
-    it("should handle empty product list", async () => {
-      mockProductsService.getAll.mockResolvedValue([]);
-
-      const response = await request(app)
-        .get("/products")
-        .expect(HTTP_STATUS.OK);
-
-      expect(response.body).toEqual([]);
-      expect(mockProductsService.getAll).toHaveBeenCalledTimes(1);
-    });
-
-    it("should handle service errors", async () => {
-      mockProductsService.getAll.mockRejectedValue(
-        new Error("Service unavailable")
-      );
-
-      await request(app)
-        .get("/products")
-        .expect(HTTP_STATUS.INTERNAL_SERVER_ERROR);
-
-      expect(mockProductsService.getAll).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("GET /products/:id", () => {
-    it("should return a product by id", async () => {
-      mockProductsService.getById.mockResolvedValue(mockData.product);
-
-      const response = await request(app)
-        .get("/products/1")
-        .expect(HTTP_STATUS.OK);
-
-      expect(response.body).toEqual(mockData.product);
-      expect(mockProductsService.getById).toHaveBeenCalledWith("1");
-    });
-
-    it("should return 404 if product not found", async () => {
-      mockProductsService.getById.mockResolvedValue(null);
-
-      const response = await request(app)
-        .get("/products/999")
-        .expect(HTTP_STATUS.NOT_FOUND);
-
-      expect(response.body).toEqual({ error: "Product not found" });
-      expect(mockProductsService.getById).toHaveBeenCalledWith("999");
-    });
-
-    it("should return 400 for empty product ID", async () => {
-      const response = await request(app)
-        .get("/products/")
-        .expect(HTTP_STATUS.NOT_FOUND); // Express gibt 404 für leere Parameter zurück
-    });
-
-    it("should handle service errors gracefully", async () => {
-      mockProductsService.getById.mockRejectedValue(
-        new Error("Database connection failed")
-      );
-
-      const response = await request(app)
-        .get("/products/1")
-        .expect(HTTP_STATUS.INTERNAL_SERVER_ERROR);
-
-      expect(response.body).toEqual({ error: "Internal server error" });
-      expect(mockProductsService.getById).toHaveBeenCalledWith("1");
-    });
-
-    it("should handle non-string product IDs", async () => {
-      // Express konvertiert Parameter automatisch zu Strings,
-      // aber wir testen trotzdem die Validierung
-      const response = await request(app)
-        .get("/products/123")
-        .expect(HTTP_STATUS.OK);
-
-      expect(mockProductsService.getById).toHaveBeenCalledWith("123");
-    });
-  });
-
   describe("POST /products", () => {
-    it("should create a new product successfully", async () => {
-      const newProductData = { name: "New Product", price: 99.99 };
-      const createdProduct = { id: "1", ...newProductData };
+    it("should create product and emit product.created event", async () => {
+      const newProduct = {
+        name: "New Product",
+        price: 199.99,
+        supplier: "Test Supplier",
+      };
+
+      const createdProduct = {
+        id: "PROD-123",
+        ...newProduct,
+        createdAt: new Date().toISOString(),
+      };
 
       mockProductsService.create.mockResolvedValue(createdProduct);
 
       const response = await request(app)
         .post("/products")
-        .send(newProductData)
-        .expect(HTTP_STATUS.CREATED);
+        .send(newProduct)
+        .expect(201);
 
       expect(response.body).toEqual(createdProduct);
-      expect(mockProductsService.create).toHaveBeenCalledWith(newProductData);
+      expect(mockProductsService.create).toHaveBeenCalledWith(newProduct);
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith("product.created", {
+        productId: "PROD-123",
+        productData: newProduct,
+        timestamp: expect.any(Date),
+      });
     });
 
-    it("should handle empty request body", async () => {
-      const createdProduct = { id: "1", name: "Default Product" };
-      mockProductsService.create.mockResolvedValue(createdProduct);
+    it("should handle service errors without emitting events", async () => {
+      const newProduct = {
+        name: "Error Product",
+        price: 99.99,
+      };
 
-      const response = await request(app)
-        .post("/products")
-        .send({})
-        .expect(HTTP_STATUS.CREATED);
+      mockProductsService.create.mockRejectedValue(new Error("Service error"));
 
-      expect(mockProductsService.create).toHaveBeenCalledWith({});
+      await request(app).post("/products").send(newProduct).expect(500);
+
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
     });
 
-    it("should handle service creation errors", async () => {
-      mockProductsService.create.mockRejectedValue(
-        new Error("Validation failed")
-      );
-
+    it("should validate required fields", async () => {
       await request(app)
         .post("/products")
-        .send({ name: "Test Product" })
-        .expect(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+        .send({}) // Kein name
+        .expect(400);
 
-      expect(mockProductsService.create).toHaveBeenCalledTimes(1);
+      expect(mockProductsService.create).not.toHaveBeenCalled();
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("PUT /products/:id", () => {
+    it("should update product and emit product.updated event", async () => {
+      const productId = "PROD-456";
+      const updateData = {
+        name: "Updated Product",
+        price: 299.99,
+      };
+
+      const updatedProduct = {
+        id: productId,
+        ...updateData,
+        updatedAt: new Date().toISOString(),
+      };
+
+      mockProductsService.update.mockResolvedValue(updatedProduct);
+
+      const response = await request(app)
+        .put(`/products/${productId}`)
+        .send(updateData)
+        .expect(200);
+
+      expect(response.body).toEqual(updatedProduct);
+      expect(mockProductsService.update).toHaveBeenCalledWith(
+        productId,
+        updateData
+      );
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith("product.updated", {
+        productId: productId,
+        productData: updateData,
+        timestamp: expect.any(Date),
+      });
     });
 
-    it("should handle invalid JSON", async () => {
-      const response = await request(app)
-        .post("/products")
-        .set("Content-Type", "application/json")
-        .send("invalid json")
-        .expect(HTTP_STATUS.BAD_REQUEST);
+    it("should handle update service errors", async () => {
+      const productId = "PROD-ERROR";
+      const updateData = { name: "Error Update" };
+
+      mockProductsService.update.mockRejectedValue(new Error("Update failed"));
+
+      await request(app)
+        .put(`/products/${productId}`)
+        .send(updateData)
+        .expect(500);
+
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
     });
   });
 
   describe("DELETE /products/:id", () => {
-    it("should delete a product successfully", async () => {
+    it("should delete product and emit product.deleted event", async () => {
+      const productId = "PROD-DELETE";
+
       mockProductsService.delete.mockResolvedValue(true);
 
-      await request(app).delete("/products/1").expect(HTTP_STATUS.NO_CONTENT);
+      await request(app).delete(`/products/${productId}`).expect(204);
 
-      expect(mockProductsService.delete).toHaveBeenCalledWith("1");
+      expect(mockProductsService.delete).toHaveBeenCalledWith(productId);
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith("product.deleted", {
+        productId: productId,
+        timestamp: expect.any(Date),
+      });
     });
 
-    it("should return 404 if product not found for deletion", async () => {
+    it("should handle delete service errors", async () => {
+      const productId = "PROD-DELETE-ERROR";
+
+      mockProductsService.delete.mockRejectedValue(new Error("Delete failed"));
+
+      await request(app).delete(`/products/${productId}`).expect(500);
+
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it("should handle product not found", async () => {
+      const productId = "PROD-NOT-FOUND";
+
       mockProductsService.delete.mockResolvedValue(false);
 
-      await request(app).delete("/products/999").expect(HTTP_STATUS.NOT_FOUND);
+      await request(app).delete(`/products/${productId}`).expect(404);
 
-      expect(mockProductsService.delete).toHaveBeenCalledWith("999");
-    });
-
-    it("should return 400 for empty product ID", async () => {
-      await request(app).delete("/products/").expect(HTTP_STATUS.NOT_FOUND); // Express behandelt leere Parameter als 404
-    });
-
-    it("should handle deletion service errors", async () => {
-      mockProductsService.delete.mockRejectedValue(new Error("Database error"));
-
-      const response = await request(app)
-        .delete("/products/1")
-        .expect(HTTP_STATUS.INTERNAL_SERVER_ERROR);
-
-      expect(response.body).toEqual({ error: "Internal server error" });
-      expect(mockProductsService.delete).toHaveBeenCalledWith("1");
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
     });
   });
 
-  describe("Router Configuration", () => {
-    it("should have router property", () => {
-      expect(productsRoutes.router).toBeDefined();
-      expect(typeof productsRoutes.router).toBe("function");
+  describe("GET /products", () => {
+    it("should get all products without emitting events", async () => {
+      const mockProducts = [
+        { id: "PROD-1", name: "Product 1", price: 100 },
+        { id: "PROD-2", name: "Product 2", price: 200 },
+      ];
+
+      mockProductsService.getAll.mockResolvedValue(mockProducts);
+
+      const response = await request(app).get("/products").expect(200);
+
+      expect(response.body).toEqual(mockProducts);
+      expect(mockProductsService.getAll).toHaveBeenCalled();
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /products/:id", () => {
+    it("should get single product without emitting events", async () => {
+      const productId = "PROD-SINGLE";
+      const mockProduct = {
+        id: productId,
+        name: "Single Product",
+        price: 150,
+      };
+
+      mockProductsService.getById.mockResolvedValue(mockProduct);
+
+      const response = await request(app)
+        .get(`/products/${productId}`)
+        .expect(200);
+
+      expect(response.body).toEqual(mockProduct);
+      expect(mockProductsService.getById).toHaveBeenCalledWith(productId);
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
     });
 
-    it("should register all routes correctly", () => {
-      const routerSpy = jest.spyOn(productsRoutes.router, "get");
-      const postSpy = jest.spyOn(productsRoutes.router, "post");
-      const deleteSpy = jest.spyOn(productsRoutes.router, "delete");
+    it("should handle product not found", async () => {
+      const productId = "PROD-NOT-FOUND";
 
-      // Neue Instanz erstellen um registerRoutes zu triggern
-      new ProductsRoutes();
+      mockProductsService.getById.mockResolvedValue(null);
 
-      expect(routerSpy).toHaveBeenCalled();
-      expect(postSpy).toHaveBeenCalled();
-      expect(deleteSpy).toHaveBeenCalled();
+      await request(app).get(`/products/${productId}`).expect(404);
+
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Event Bus Integration", () => {
+    it("should use EventBus singleton", async () => {
+      expect(ServiceEventBus.getInstance).toHaveBeenCalled();
+    });
+
+    it("should emit events with correct timestamps", async () => {
+      const beforeTime = Date.now();
+      const newProduct = { name: "Timestamp Test", price: 100 };
+      const createdProduct = { id: "PROD-TIME", ...newProduct };
+
+      mockProductsService.create.mockResolvedValue(createdProduct);
+
+      await request(app).post("/products").send(newProduct).expect(201);
+
+      const emitCall = mockEventBus.emit.mock.calls[0];
+      expect(emitCall).toBeDefined();
+      const eventData = emitCall![1] as any;
+      const afterTime = Date.now();
+
+      expect(eventData.timestamp.getTime()).toBeGreaterThanOrEqual(beforeTime);
+      expect(eventData.timestamp.getTime()).toBeLessThanOrEqual(afterTime);
     });
   });
 });

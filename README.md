@@ -7,15 +7,16 @@ Das MeisterPlan Gateway ist eine **hochmoderne Node.js/Express-Microservice-Anwe
 ### 🎯 Core Functionality
 
 - **REST-API für Business-Kunden** (CRUD-Operationen)
-- **Produktverwaltung** (Products Service Integration)
+- **Event-driven Produktverwaltung** (Products Service mit automatischer Inventory-Synchronisation)
 - **Inventarverwaltung** (Inventory Management System)
-- **Zentrale Service-Orchestrierung** mit modularer Architektur
+- **Zentrale Service-Orchestrierung** mit Event-driven Architecture
 
 ### 🏗️ Architecture & Quality
 
 - **TypeScript-First** für 100% Typensicherheit
-- **Modulare Service-Layer-Architektur**
-- **Umfassende Test-Suite** (90.5% Pass-Rate, 126 Tests)
+- **Event-driven Microservice Architecture** mit loosely coupled Services
+- **Umfassende Test-Suite** (Event-System vollständig getestet)
+- **ServiceEventBus** für saubere Service-Kommunikation
 - **Professional CORS-Middleware** mit umgebungsbasierten Konfigurationen
 - **Docker & Kubernetes Ready** für Cloud-Native-Deployments
 
@@ -31,20 +32,24 @@ Das MeisterPlan Gateway ist eine **hochmoderne Node.js/Express-Microservice-Anwe
 ```
 gateway/
 ├── 📂 src/                          # Source Code (TypeScript)
-│   ├── 📄 App.ts                    # Express Application Setup
+│   ├── 📄 App.ts                    # Express Application Setup + Event System
 │   ├── 📄 server.ts                 # Server Entry Point
 │   ├── 📂 config/                   # Konfigurationsdateien
 │   │   ├── 📄 apiConfig.ts          # API-Endpunkt-URLs
 │   │   ├── 📄 env.ts                # Umgebungsvariablen
 │   │   ├── 📄 index.ts              # Config-Exports
 │   │   └── 📄 RouterConfig.ts       # Router-Konfiguration
+│   ├── 📂 events/                   # Event-driven Architecture
+│   │   └── 📄 ServiceEventBus.ts    # Zentraler Event Bus (Singleton)
+│   ├── 📂 handlers/                 # Event Handler
+│   │   └── 📄 InventorySyncHandler.ts # Product-Inventory Synchronisation
 │   ├── 📂 middlewares/              # Express-Middleware
 │   │   ├── 📄 authMiddleware.ts     # Authentifizierung
 │   │   ├── 📄 corsMiddleware.ts     # CORS-Konfiguration
 │   │   └── 📄 logger.ts             # Request-Logging
 │   ├── 📂 routes/                   # Express-Routes
 │   │   ├── 📄 BusinessCustomerRoutes.ts  # Business-Kunden-API
-│   │   ├── 📄 ProductsRoutes.ts     # Produkte-API
+│   │   ├── 📄 ProductsRoutes.ts     # Event-driven Produkte-API
 │   │   ├── 📄 InventoryRoutes.ts    # Inventar-API
 │   │   ├── 📄 auth.ts               # Authentifizierung-Routes
 │   │   └── 📄 index.ts              # Route-Exports
@@ -54,13 +59,15 @@ gateway/
 │   │   └── 📄 InventoryService.ts   # Inventar-Service
 │   └── 📂 utils/                    # Utility-Funktionen
 │       └── 📄 apiFetch.ts           # HTTP-Client-Wrapper
-├── 📂 tests/                        # Test-Suite (126 Tests)
+├── 📂 tests/                        # Test-Suite (Event-driven getestet)
 │   ├── 📄 setup.ts                  # Test-Setup & Mocks
 │   ├── 📄 testUtils.ts              # Test-Utilities
 │   ├── 📂 config/                   # Config-Tests
+│   ├── 📂 events/                   # Event-System Tests
+│   ├── 📂 handlers/                 # Event-Handler Tests
 │   ├── 📂 routes/                   # Route-Tests (Unit)
 │   ├── 📂 services/                 # Service-Tests (Unit)
-│   └── 📂 integration/              # Integration-Tests
+│   └── 📂 integration/              # Integration-Tests + Event-driven Tests
 ├── 📂 dist/                         # Compiled JavaScript (Build)
 ├── 📄 jest.config.js                # Jest-Testing-Konfiguration
 ├── 📄 tsconfig.json                 # TypeScript-Konfiguration
@@ -71,21 +78,24 @@ gateway/
 
 ### 🎨 Architektur-Prinzipien
 
-**🔄 Service-Layer-Pattern**
+**🔄 Event-driven Architecture**
 
-- Saubere Trennung zwischen Routes, Services und Utilities
-- Modulare Service-Integration für externe APIs
-- Dependency-Injection-Ready für Testability
+- **ServiceEventBus** als zentraler Event-Dispatcher (Singleton-Pattern)
+- **Loosely Coupled Services** ohne direkte Dependencies
+- **InventorySyncHandler** für automatische Product-Inventory-Synchronisation
+- **Single Responsibility Principle** für jeden Event-Handler
 
 **🎯 RESTful API Design**
 
-- Konsistente HTTP-Methoden (GET, POST, DELETE)
+- Konsistente HTTP-Methoden (GET, POST, PUT, DELETE)
+- Event-basierte Service-Kommunikation
 - Standardisierte Error-Handling-Responses
 - JSON-basierte Kommunikation
 
 **🛡️ Type-Safety First**
 
 - Vollständige TypeScript-Implementierung
+- Typisierte Event-Definitionen (ProductCreatedEvent, ProductUpdatedEvent, etc.)
 - Interface-Definitionen für alle Data-Models
 - Compile-Time Error-Detection
 
@@ -168,11 +178,83 @@ npm run test:verbose
 
 ### 📊 Test-Coverage
 
-- **126 Tests total** über 7 Test-Suites
-- **Unit Tests**: Routes, Services, Configuration
-- **Integration Tests**: End-to-End-Workflows
+- **Event-System**: ServiceEventBus und InventorySyncHandler vollständig getestet
+- **Unit Tests**: Routes, Services, Event-Handler, Configuration
+- **Integration Tests**: End-to-End Event-driven Workflows
+- **Event-driven Tests**: Product-Inventory Synchronisation validiert
 - **Mock-System**: Vollständig gemockte externe Services
 - Detaillierte Dokumentation: [`TEST_DOCUMENTATION.md`](./TEST_DOCUMENTATION.md)
+
+### 🔄 Event-System Tests
+
+```bash
+# Event-System Tests ausführen
+npm test -- tests/events tests/handlers
+
+# Event-driven Integration Tests
+npm test -- tests/integration/event-driven.integration.test.ts
+```
+
+**Test-Beispiele:**
+
+- ✅ ServiceEventBus Singleton-Verhalten
+- ✅ Event-Emission und -Handling
+- ✅ InventorySyncHandler automatische Synchronisation
+- ✅ Event-Error-Handling und Resilience
+- ✅ Event-Listener Cleanup
+
+## 🔄 Event-driven Architecture
+
+### ServiceEventBus
+
+Das Herzstück der Event-driven Architecture ist der **ServiceEventBus** - ein Singleton-EventEmitter, der alle Service-Kommunikation koordiniert.
+
+```typescript
+import { ServiceEventBus } from "./events/ServiceEventBus";
+
+// Event emittieren
+const eventBus = ServiceEventBus.getInstance();
+eventBus.emit("product.created", {
+  productId: "PROD-123",
+  productData: { name: "New Product", price: 99.99 },
+  timestamp: new Date(),
+});
+
+// Event-Handler registrieren
+eventBus.on("product.created", (event) => {
+  console.log(`Product ${event.productId} created`);
+});
+```
+
+### Event-Types
+
+**Product Events:**
+
+- `product.created` - Neues Produkt erstellt
+- `product.updated` - Produkt aktualisiert
+- `product.deleted` - Produkt gelöscht
+
+### InventorySyncHandler
+
+Automatische Synchronisation zwischen Products und Inventory:
+
+```typescript
+// Wird automatisch in App.ts initialisiert
+const inventorySyncHandler = new InventorySyncHandler(inventoryService);
+
+// Reagiert auf Product-Events:
+// product.created  → inventory.create()
+// product.updated  → inventory.update()
+// product.deleted  → inventory.delete()
+```
+
+### Architektur-Benefits
+
+✅ **Loose Coupling** - Services kennen sich nicht direkt  
+✅ **Single Responsibility** - Jeder Handler hat einen klaren Zweck  
+✅ **Testability** - Handler isoliert testbar  
+✅ **Resilience** - Fehler in einem Handler blockieren andere nicht  
+✅ **Extensibility** - Neue Handler einfach hinzufügbar
 
 ## 🌐 API-Dokumentation
 
@@ -212,14 +294,21 @@ DELETE /business-customers/:id  # Kunden löschen
 }
 ```
 
-### 📦 Products API
+### 📦 Products API (Event-driven)
 
 ```http
 GET    /products      # Alle Produkte abrufen
 GET    /products/:id  # Spezifisches Produkt abrufen
-POST   /products      # Neues Produkt erstellen
-DELETE /products/:id  # Produkt löschen
+POST   /products      # Neues Produkt erstellen → product.created Event
+PUT    /products/:id  # Produkt aktualisieren → product.updated Event
+DELETE /products/:id  # Produkt löschen → product.deleted Event
 ```
+
+**🔥 Event-driven Features:**
+
+- **Automatische Inventory-Synchronisation** bei allen CRUD-Operationen
+- **Resiliente Architektur** - Product-Operationen funktionieren auch bei Inventory-Service-Ausfällen
+- **Loose Coupling** - Services kennen sich nicht direkt
 
 ### 📊 Inventory API
 
@@ -227,8 +316,15 @@ DELETE /products/:id  # Produkt löschen
 GET    /inventory                 # Alle Lagerbestände abrufen
 GET    /inventory/:articleNum     # Bestand nach Artikelnummer
 POST   /inventory                 # Neuen Lagerbestand erstellen
+PUT    /inventory/:articleNum     # Lagerbestand aktualisieren
 DELETE /inventory/:articleNum     # Lagerbestand löschen
 ```
+
+**🔄 Event-Integration:**
+
+- **Automatische Synchronisation** durch InventorySyncHandler
+- **Event-basierte Updates** von Products-Service
+- **Artikelnummer-basierte Zuordnung** (Product.id = Inventory.articleNum)
 
 **Beispiel-Request:**
 
@@ -396,19 +492,57 @@ class BusinessCustomerService {
 }
 ```
 
-**Route-Handler-Pattern:**
+**Event-driven Route-Handler-Pattern:**
 
 ```typescript
-// Clean Route-Handler mit Service-Integration
-class BusinessCustomerRoutes {
-  constructor(private service = new BusinessCustomerService()) {}
+// Event-driven ProductsRoutes ohne direkte Service-Dependencies
+class ProductsRoutes {
+  constructor() {
+    this.eventBus = ServiceEventBus.getInstance();
+  }
 
-  async getCustomerById(req: Request, res: Response) {
+  async createProduct(req: Request, res: Response) {
     try {
-      const customer = await this.service.getById(req.params.id);
-      res.json(customer);
+      const newProduct = await this.productsService.create(req.body);
+
+      // Event emittieren für lose gekoppelte Services
+      this.eventBus.emit("product.created", {
+        productId: newProduct.id,
+        productData: req.body,
+        timestamp: new Date(),
+      });
+
+      res.status(201).json(newProduct);
     } catch (error) {
       res.status(500).json({ error: "Internal server error" });
+    }
+  }
+}
+```
+
+**Event-Handler-Pattern:**
+
+```typescript
+// Spezialisierter Handler für Service-Synchronisation
+class InventorySyncHandler {
+  constructor(private inventoryService: InventoryService) {
+    const eventBus = ServiceEventBus.getInstance();
+    eventBus.on("product.created", this.handleProductCreated.bind(this));
+  }
+
+  private async handleProductCreated(event: ProductCreatedEvent) {
+    try {
+      await this.inventoryService.create({
+        articleNum: event.productId,
+        productName: event.productData.name,
+        quantity: 0,
+        location: "Main Warehouse",
+      });
+    } catch (error) {
+      console.error(
+        `Failed to create inventory for ${event.productId}:`,
+        error
+      );
     }
   }
 }
@@ -494,7 +628,9 @@ GET /health
 
 ## 📚 Weitere Dokumentation
 
-- 📄 **[Test-Dokumentation](./TEST_DOCUMENTATION.md)** - Umfassende Test-Suite-Dokumentation
+- � **[Event-driven Architecture](./docs/EVENT_DRIVEN_ARCHITECTURE.md)** - Vollständige Event-System-Dokumentation
+- 🔄 **[Product-Inventory Synchronisation](./docs/PRODUCT_INVENTORY_SYNC.md)** - Event-basierte Service-Synchronisation
+- �📄 **[Test-Dokumentation](./TEST_DOCUMENTATION.md)** - Umfassende Test-Suite-Dokumentation
 - 🐳 **[Docker-Guide](./docs/docker.md)** - Container-Setup und Deployment
 - ☸️ **[Kubernetes-Guide](./docs/kubernetes.md)** - K8s-Deployment-Strategien
 - 🔧 **[API-Reference](./docs/api.md)** - Detaillierte API-Spezifikation

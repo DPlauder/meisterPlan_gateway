@@ -14,6 +14,7 @@ export class InventoryRoutes {
     this.router.get("/", this.getAllInventory.bind(this));
     this.router.get("/:articleNum", this.getInventoryByArticleNum.bind(this));
     this.router.post("/", this.createInventory.bind(this));
+    this.router.put("/:articleNum", this.updateInventory.bind(this));
     this.router.delete("/:articleNum", this.deleteInventory.bind(this));
   }
   private async getAllInventory(req: Request, res: Response): Promise<void> {
@@ -53,6 +54,26 @@ export class InventoryRoutes {
       res.status(500).json({ error: "Internal Server Error" });
     }
   }
+
+  private async updateInventory(req: Request, res: Response): Promise<void> {
+    try {
+      const articleNum = req.params.articleNum;
+      if (!articleNum || typeof articleNum !== "string") {
+        res.status(400).json({ error: "Invalid article number" });
+        return;
+      }
+
+      const updatedInventoryItem = await this.inventoryService.update(
+        articleNum,
+        req.body
+      );
+      res.json(updatedInventoryItem);
+    } catch (error) {
+      console.error("Error updating inventory item:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+
   private async deleteInventory(req: Request, res: Response): Promise<void> {
     try {
       const articleNum = req.params.articleNum;

@@ -20,6 +20,14 @@ export class InventoryService {
       body: JSON.stringify(inventoryData),
     });
   }
+  async update(articleNum: string, inventoryData: any): Promise<any> {
+    const url = `${this.baseUrl}/${articleNum}`;
+    return apiFetch(url, {
+      method: "PUT",
+      body: JSON.stringify(inventoryData),
+    });
+  }
+
   async delete(articleNum: string): Promise<boolean> {
     const url = `${this.baseUrl}/${articleNum}`;
     const response = await apiFetch(url, { method: "DELETE" });

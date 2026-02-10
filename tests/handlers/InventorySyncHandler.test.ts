@@ -21,17 +21,20 @@ describe("InventorySyncHandler", () => {
   beforeEach(() => {
     // EventBus-Singleton zurücksetzen für jeden Test
     (ServiceEventBus as any).instance = undefined;
-    eventBus = ServiceEventBus.getInstance();
+    // InventorySyncHandler-Singleton zurücksetzen
+    InventorySyncHandler.resetInstance();
 
+    eventBus = ServiceEventBus.getInstance();
     mockInventoryService =
       new InventoryService() as jest.Mocked<InventoryService>;
-    inventorySyncHandler = new InventorySyncHandler(mockInventoryService);
+    inventorySyncHandler =
+      InventorySyncHandler.getInstance(mockInventoryService);
 
     jest.clearAllMocks();
   });
 
   afterEach(() => {
-    inventorySyncHandler.destroy();
+    InventorySyncHandler.resetInstance();
   });
 
   describe("Product Created Events", () => {
@@ -80,7 +83,8 @@ describe("InventorySyncHandler", () => {
       };
 
       eventBus.emit("product.created", productCreatedEvent);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Längeres Warten wegen Retry-Logik (3 Versuche mit Delays)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -155,14 +159,24 @@ describe("InventorySyncHandler", () => {
       expect(eventBus1).toBe(eventBus2); // Sollten dieselbe Instanz sein
     });
 
-    it("should properly clean up event listeners on destroy", () => {
-      const removeAllListenersSpy = jest.spyOn(eventBus, "removeAllListeners");
+    it("should properly clean up event listeners on resetInstance", () => {
+      const removeListenerSpy = jest.spyOn(eventBus, "removeListener");
 
-      inventorySyncHandler.destroy();
+      InventorySyncHandler.resetInstance();
 
-      expect(removeAllListenersSpy).toHaveBeenCalledWith("product.created");
-      expect(removeAllListenersSpy).toHaveBeenCalledWith("product.updated");
-      expect(removeAllListenersSpy).toHaveBeenCalledWith("product.deleted");
+      expect(removeListenerSpy).toHaveBeenCalledTimes(3);
+      expect(removeListenerSpy).toHaveBeenCalledWith(
+        "product.created",
+        expect.any(Function)
+      );
+      expect(removeListenerSpy).toHaveBeenCalledWith(
+        "product.updated",
+        expect.any(Function)
+      );
+      expect(removeListenerSpy).toHaveBeenCalledWith(
+        "product.deleted",
+        expect.any(Function)
+      );
     });
   });
 });

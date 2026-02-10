@@ -23,10 +23,10 @@ export class BusinessCustomerService {
       body: JSON.stringify(customerData),
     });
   }
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string): Promise<{ isSuccess: boolean; message?: string }> {
     const url = `${this.baseUrl}/${id}`;
     const response = await apiFetch(url, { method: "DELETE" });
     console.log("delete response:", response);
-    return response.success || false;
+    return { isSuccess: !!response?.success, message: response?.message };
   }
 }

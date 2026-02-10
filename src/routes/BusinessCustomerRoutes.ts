@@ -57,12 +57,12 @@ export class BusinessCustomerRoutes {
         res.status(400).json({ error: "Invalid customer ID" });
         return;
       }
-      const deleted = await this.businessCustomerService.delete(customerId);
-      if (!deleted) {
+      const result = await this.businessCustomerService.delete(customerId);
+      if (!result.isSuccess) {
         res.status(404).json({ error: "Customer not found" });
         return;
       }
-      res.status(204).send();
+      res.status(200).json({ success: true, message: result.message });
     } catch (error) {
       console.error("Error deleting business customer:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -76,9 +76,8 @@ export class BusinessCustomerRoutes {
         res.status(400).json({ error: "Invalid customer data" });
         return;
       }
-      const newCustomer = await this.businessCustomerService.create(
-        customerData
-      );
+      const newCustomer =
+        await this.businessCustomerService.create(customerData);
       res.status(201).json(newCustomer);
     } catch (error) {
       console.error("Error creating business customer:", error);

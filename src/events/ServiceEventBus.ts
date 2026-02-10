@@ -8,7 +8,10 @@ export class ServiceEventBus extends EventEmitter {
 
   static getInstance(): ServiceEventBus {
     if (!ServiceEventBus.instance) {
+      console.log("🔄 Erstelle neue ServiceEventBus Instanz");
       ServiceEventBus.instance = new ServiceEventBus();
+    } else {
+      console.log("♻️ Verwende bestehende ServiceEventBus Instanz");
     }
     return ServiceEventBus.instance;
   }
@@ -18,6 +21,11 @@ export class ServiceEventBus extends EventEmitter {
   emit(event: "product.updated", data: ProductUpdatedEvent): boolean;
   emit(event: "product.deleted", data: ProductDeletedEvent): boolean;
   emit(event: string, ...args: any[]): boolean {
+    if (event.startsWith("product.")) {
+      console.log(
+        `📤 Event emittiert: ${event}, Listener: ${this.listenerCount(event)}`
+      );
+    }
     return super.emit(event, ...args);
   }
 

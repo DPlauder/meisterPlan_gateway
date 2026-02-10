@@ -4,17 +4,28 @@ import { ProductsRoutes } from "../routes/ProductsRoutes";
 import { InventoryRoutes } from "../routes/InventoryRoutes";
 
 export class RouterConfig {
+  private static businessCustomerController: BusinessCustomerRoutes;
+  private static productsController: ProductsRoutes;
+  private static inventoryController: InventoryRoutes;
+
   public static register(app: Application): void {
-    const businessCustomerController = new BusinessCustomerRoutes();
+    // Singleton-Pattern für alle Router um mehrfache Instanziierung zu verhindern
+    if (!this.businessCustomerController) {
+      this.businessCustomerController = new BusinessCustomerRoutes();
+    }
 
-    app.use("/business-customers", businessCustomerController.getRouter());
+    if (!this.productsController) {
+      this.productsController = new ProductsRoutes();
+    }
 
-    // Event-driven Products Routes - Saubere Architektur ohne direkte Service-Kopplung
-    app.use("/products", new ProductsRoutes().router);
+    if (!this.inventoryController) {
+      this.inventoryController = new InventoryRoutes();
+    }
 
-    app.use("/inventory", new InventoryRoutes().router);
+    app.use("/business-customers", this.businessCustomerController.router);
+    app.use("/products", this.productsController.router);
+    app.use("/inventory", this.inventoryController.router);
 
-    // Additional routes can be registered here
-    // e.g., app.use('/another-route', anotherController.getRouter());
+    console.log("📋 Routes registered as singletons");
   }
 }

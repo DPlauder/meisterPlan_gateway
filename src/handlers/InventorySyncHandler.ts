@@ -13,31 +13,127 @@ import { InventoryService } from "../services/InventoryService";
 export class InventorySyncHandler {
   private eventBus: ServiceEventBus;
   private inventoryService: InventoryService;
+  private static instance: InventorySyncHandler | null = null;
+
+  // Bound Methoden für konsistente Referenzen
+  private boundHandleProductCreated: (
+    event: ProductCreatedEvent
+  ) => Promise<void>;
+  private boundHandleProductUpdated: (
+    event: ProductUpdatedEvent
+  ) => Promise<void>;
+  private boundHandleProductDeleted: (
+    event: ProductDeletedEvent
+  ) => Promise<void>;
 
   constructor(inventoryService?: InventoryService) {
+    if (InventorySyncHandler.instance) {
+      console.error("❌ MEHRFACHE INSTANZIIERUNG VERHINDERT!");
+      throw new Error(
+        "InventorySyncHandler ist ein Singleton. Verwende getInstance()"
+      );
+    }
+
+    console.log("🔧 InventorySyncHandler wird erstellt...");
     this.eventBus = ServiceEventBus.getInstance();
     this.inventoryService = inventoryService || new InventoryService();
+
+    // Bound-Methoden erstellen für konsistente Referenzen
+    this.boundHandleProductCreated = this.handleProductCreated.bind(this);
+    this.boundHandleProductUpdated = this.handleProductUpdated.bind(this);
+    this.boundHandleProductDeleted = this.handleProductDeleted.bind(this);
+
     this.registerEventHandlers();
+
+    InventorySyncHandler.instance = this;
+    console.log("✅ InventorySyncHandler erfolgreich erstellt");
+  }
+
+  // Singleton-Pattern um mehrfache Instanziierung zu verhindern
+  public static getInstance(
+    inventoryService?: InventoryService
+  ): InventorySyncHandler {
+    if (!InventorySyncHandler.instance) {
+      console.log("🆕 Erstelle neue InventorySyncHandler Instanz");
+      InventorySyncHandler.instance = new InventorySyncHandler(
+        inventoryService
+      );
+    } else {
+      console.log("♻️ Verwende bestehende InventorySyncHandler Instanz");
+    }
+    return InventorySyncHandler.instance;
+  }
+
+  // Cleanup-Methode für Tests
+  public static resetInstance(): void {
+    if (InventorySyncHandler.instance) {
+      InventorySyncHandler.instance.cleanup();
+      InventorySyncHandler.instance = null;
+    }
+  }
+
+  private cleanup(): void {
+    this.eventBus.removeListener(
+      "product.created",
+      this.boundHandleProductCreated
+    );
+    this.eventBus.removeListener(
+      "product.updated",
+      this.boundHandleProductUpdated
+    );
+    this.eventBus.removeListener(
+      "product.deleted",
+      this.boundHandleProductDeleted
+    );
+    console.log("🧹 Event-Listener entfernt");
   }
 
   private registerEventHandlers(): void {
-    this.eventBus.on("product.created", this.handleProductCreated.bind(this));
-    this.eventBus.on("product.updated", this.handleProductUpdated.bind(this));
-    this.eventBus.on("product.deleted", this.handleProductDeleted.bind(this));
+    // ALLES ENTFERNEN - KOMPLETT SAUBER MACHEN
+    this.eventBus.removeAllListeners("product.created");
+    this.eventBus.removeAllListeners("product.updated");
+    this.eventBus.removeAllListeners("product.deleted");
+
+    console.log("🧹 ALLE LISTENER ENTFERNT!");
+
+    // NUR EINMAL REGISTRIEREN
+    this.eventBus.on("product.created", this.boundHandleProductCreated);
+    this.eventBus.on("product.updated", this.boundHandleProductUpdated);
+    this.eventBus.on("product.deleted", this.boundHandleProductDeleted);
+
+    console.log(
+      `📋 InventorySyncHandler registered. Active listeners: ${this.eventBus.listenerCount(
+        "product.created"
+      )}`
+    );
   }
 
   private async handleProductCreated(
     event: ProductCreatedEvent
   ): Promise<void> {
+    console.log(
+      "🔥🔥🔥 HANDLER WIRD AUSGEFÜHRT FÜR:",
+      event.productId,
+      "🔥🔥🔥"
+    );
+
+    // Event-Validierung
+    if (!event.productId || !event.productData?.name) {
+      console.error("❌ Invalid product.created event:", event);
+      return;
+    }
+
+    // KEIN RETRY - NUR EINMAL VERSUCHEN
     try {
       const inventoryItem = {
-        articleNum: event.productId,
-        productName: event.productData.name,
+        articleNumber: event.productId,
+        name: event.productData.name,
         quantity: 0, // Initial-Bestand
         location: "Main Warehouse",
         supplier: event.productData.supplier || "Default Supplier",
       };
 
+      console.log("📤 Erstelle Inventory Item:", inventoryItem);
       await this.inventoryService.create(inventoryItem);
       console.log(`✅ Inventory item created for product ${event.productId}`);
     } catch (error) {
@@ -45,7 +141,8 @@ export class InventorySyncHandler {
         `❌ Failed to create inventory item for product ${event.productId}:`,
         error
       );
-      // Hier könnte man Retry-Logic oder Dead-Letter-Queue implementieren
+      // Event in Dead-Letter-Queue einreihen
+      await this.handleFailedEvent("product.created", event, error as Error);
     }
   }
 
@@ -56,7 +153,7 @@ export class InventorySyncHandler {
       const inventoryUpdate: any = {};
 
       if (event.productData.name) {
-        inventoryUpdate.productName = event.productData.name;
+        inventoryUpdate.name = event.productData.name; // ✅ Korrigiert
       }
 
       if (event.productData.supplier) {
@@ -91,11 +188,35 @@ export class InventorySyncHandler {
   }
 
   /**
+   * Hilfsmethode für Retry-Delays
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Behandelt fehlgeschlagene Events (Dead-Letter-Queue Pattern)
+   */
+  private async handleFailedEvent(
+    eventType: string,
+    event: any,
+    error: Error
+  ): Promise<void> {
+    // Hier könnte man das Event in eine Warteschlange für spätere Verarbeitung einreihen
+    console.error(`📋 Adding ${eventType} event to dead-letter-queue:`, {
+      event,
+      error: error.message,
+    });
+
+    // TODO: Implementierung einer echten Dead-Letter-Queue
+    // z.B. Redis, Database, oder Message Queue System
+  }
+
+  /**
    * Graceful Shutdown - Event-Listener entfernen
+   * @deprecated Verwende InventorySyncHandler.resetInstance() für saubere Singleton-Behandlung
    */
   destroy(): void {
-    this.eventBus.removeAllListeners("product.created");
-    this.eventBus.removeAllListeners("product.updated");
-    this.eventBus.removeAllListeners("product.deleted");
+    this.cleanup();
   }
 }

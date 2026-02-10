@@ -8,12 +8,28 @@ import { InventoryService } from "./services/InventoryService";
 export class App {
   private readonly app: Application;
   private inventorySyncHandler: InventorySyncHandler | undefined;
+  private static instance: App | null = null;
 
   constructor() {
+    if (App.instance) {
+      throw new Error("App ist ein Singleton. Verwende getInstance()");
+    }
+
+    console.log("🚀 App wird erstellt...");
     this.app = express();
     this.initializeEventSystem();
     this.initializeMiddleware();
     this.initializeRoutes();
+
+    App.instance = this;
+    console.log("✅ App erfolgreich erstellt");
+  }
+
+  public static getInstance(): App {
+    if (!App.instance) {
+      App.instance = new App();
+    }
+    return App.instance;
   }
 
   private initializeMiddleware(): void {
@@ -27,7 +43,8 @@ export class App {
   private initializeEventSystem(): void {
     const eventBus = ServiceEventBus.getInstance();
     const inventoryService = new InventoryService();
-    this.inventorySyncHandler = new InventorySyncHandler(inventoryService);
+    this.inventorySyncHandler =
+      InventorySyncHandler.getInstance(inventoryService);
 
     console.log("Event-driven architecture initialized");
   }
@@ -41,8 +58,13 @@ export class App {
   }
 
   public cleanup(): void {
-    if (this.inventorySyncHandler) {
-      this.inventorySyncHandler.destroy();
+    InventorySyncHandler.resetInstance();
+  }
+
+  public static resetInstance(): void {
+    if (App.instance) {
+      App.instance.cleanup();
+      App.instance = null;
     }
   }
 }

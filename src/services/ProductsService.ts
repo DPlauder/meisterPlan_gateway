@@ -15,23 +15,10 @@ export class ProductsService {
     return apiFetch(this.baseUrl);
   }
   async create(productData: any): Promise<any> {
-    try {
-      return await apiFetch(this.baseUrl, {
-        method: "POST",
-        body: JSON.stringify(productData),
-      });
-    } catch (error) {
-      // Fallback für Entwicklung - Mock-Produkt erstellen
-      console.warn("⚠️ Products API not available, using mock data:", error);
-      return {
-        id: `PROD-${Date.now()}`,
-        name: productData.name,
-        price: productData.price,
-        supplier: productData.supplier,
-        description: productData.description,
-        createdAt: new Date().toISOString(),
-      };
-    }
+    return apiFetch(this.baseUrl, {
+      method: "POST",
+      body: JSON.stringify(productData),
+    });
   }
   async update(id: string, productData: any): Promise<any> {
     const url = `${this.baseUrl}/${id}`;

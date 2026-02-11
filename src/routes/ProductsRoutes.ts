@@ -52,12 +52,41 @@ export class ProductsRoutes {
 
   private async createProduct(req: Request, res: Response) {
     try {
-      // Nur Product-Service verwenden - keine direkte Inventory-Kopplung
-      const newProduct = await this.productsService.create(req.body);
+      const articleNum = req.body?.articleNum;
+      if (!articleNum || typeof articleNum !== "string") {
+        res.status(400).json({ error: "articleNum is required" });
+        return;
+      }
+
+      let newProduct;
+      try {
+        newProduct = await this.productsService.create(req.body);
+      } catch (productError: any) {
+        // Parse HTTP status from error message
+        const statusMatch = productError.message?.match(
+          /Request failed \((\d+)\)/,
+        );
+        if (statusMatch) {
+          const status = parseInt(statusMatch[1]);
+          if (status === 400) {
+            res.status(400).json({ error: "Invalid product data" });
+          } else if (status === 409) {
+            res
+              .status(409)
+              .json({ error: "Product with this articleNum already exists" });
+          } else {
+            res.status(status).json({ error: "Product service error" });
+          }
+          return;
+        }
+        throw productError;
+      }
+
+      const productId = newProduct.articleNum || articleNum;
 
       // Event emittieren für andere Services (Inventory, Analytics, etc.)
       this.eventBus.emit("product.created", {
-        productId: newProduct.id || `PROD-${Date.now()}`,
+        productId,
         productData: {
           name: newProduct.name || req.body.name,
           price: newProduct.price || req.body.price,
@@ -84,7 +113,7 @@ export class ProductsRoutes {
 
       const updatedProduct = await this.productsService.update(
         productId,
-        req.body
+        req.body,
       );
 
       if (!updatedProduct) {

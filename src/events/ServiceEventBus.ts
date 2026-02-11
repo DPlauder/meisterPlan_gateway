@@ -23,7 +23,7 @@ export class ServiceEventBus extends EventEmitter {
   emit(event: string, ...args: any[]): boolean {
     if (event.startsWith("product.")) {
       console.log(
-        `📤 Event emittiert: ${event}, Listener: ${this.listenerCount(event)}`
+        `📤 Event emittiert: ${event}, Listener: ${this.listenerCount(event)}`,
       );
     }
     return super.emit(event, ...args);
@@ -31,15 +31,15 @@ export class ServiceEventBus extends EventEmitter {
 
   on(
     event: "product.created",
-    listener: (data: ProductCreatedEvent) => void
+    listener: (data: ProductCreatedEvent) => void,
   ): this;
   on(
     event: "product.updated",
-    listener: (data: ProductUpdatedEvent) => void
+    listener: (data: ProductUpdatedEvent) => void,
   ): this;
   on(
     event: "product.deleted",
-    listener: (data: ProductDeletedEvent) => void
+    listener: (data: ProductDeletedEvent) => void,
   ): this;
   on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
@@ -56,6 +56,7 @@ export interface ProductCreatedEvent {
     supplier?: string;
   };
   timestamp: Date;
+  inventorySynced?: boolean;
 }
 
 export interface ProductUpdatedEvent {

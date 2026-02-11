@@ -17,20 +17,20 @@ export class InventorySyncHandler {
 
   // Bound Methoden für konsistente Referenzen
   private boundHandleProductCreated: (
-    event: ProductCreatedEvent
+    event: ProductCreatedEvent,
   ) => Promise<void>;
   private boundHandleProductUpdated: (
-    event: ProductUpdatedEvent
+    event: ProductUpdatedEvent,
   ) => Promise<void>;
   private boundHandleProductDeleted: (
-    event: ProductDeletedEvent
+    event: ProductDeletedEvent,
   ) => Promise<void>;
 
   constructor(inventoryService?: InventoryService) {
     if (InventorySyncHandler.instance) {
       console.error("❌ MEHRFACHE INSTANZIIERUNG VERHINDERT!");
       throw new Error(
-        "InventorySyncHandler ist ein Singleton. Verwende getInstance()"
+        "InventorySyncHandler ist ein Singleton. Verwende getInstance()",
       );
     }
 
@@ -51,12 +51,12 @@ export class InventorySyncHandler {
 
   // Singleton-Pattern um mehrfache Instanziierung zu verhindern
   public static getInstance(
-    inventoryService?: InventoryService
+    inventoryService?: InventoryService,
   ): InventorySyncHandler {
     if (!InventorySyncHandler.instance) {
       console.log("🆕 Erstelle neue InventorySyncHandler Instanz");
       InventorySyncHandler.instance = new InventorySyncHandler(
-        inventoryService
+        inventoryService,
       );
     } else {
       console.log("♻️ Verwende bestehende InventorySyncHandler Instanz");
@@ -75,15 +75,15 @@ export class InventorySyncHandler {
   private cleanup(): void {
     this.eventBus.removeListener(
       "product.created",
-      this.boundHandleProductCreated
+      this.boundHandleProductCreated,
     );
     this.eventBus.removeListener(
       "product.updated",
-      this.boundHandleProductUpdated
+      this.boundHandleProductUpdated,
     );
     this.eventBus.removeListener(
       "product.deleted",
-      this.boundHandleProductDeleted
+      this.boundHandleProductDeleted,
     );
     console.log("🧹 Event-Listener entfernt");
   }
@@ -103,19 +103,23 @@ export class InventorySyncHandler {
 
     console.log(
       `📋 InventorySyncHandler registered. Active listeners: ${this.eventBus.listenerCount(
-        "product.created"
-      )}`
+        "product.created",
+      )}`,
     );
   }
 
   private async handleProductCreated(
-    event: ProductCreatedEvent
+    event: ProductCreatedEvent,
   ): Promise<void> {
     console.log(
       "🔥🔥🔥 HANDLER WIRD AUSGEFÜHRT FÜR:",
       event.productId,
-      "🔥🔥🔥"
+      "🔥🔥🔥",
     );
+
+    if (event.inventorySynced) {
+      return;
+    }
 
     // Event-Validierung
     if (!event.productId || !event.productData?.name) {
@@ -125,8 +129,19 @@ export class InventorySyncHandler {
 
     // KEIN RETRY - NUR EINMAL VERSUCHEN
     try {
+      try {
+        await this.inventoryService.getByArticleNum(event.productId);
+        console.log(
+          `ℹ️ Inventory already exists for product ${event.productId}. Skipping create.`,
+        );
+        return;
+      } catch (existingError) {
+        // Not found - proceed with creation
+      }
+
       const inventoryItem = {
-        articleNumber: event.productId,
+        productId: event.productId,
+        articleNum: event.productId,
         name: event.productData.name,
         quantity: 0, // Initial-Bestand
         location: "Main Warehouse",
@@ -139,7 +154,7 @@ export class InventorySyncHandler {
     } catch (error) {
       console.error(
         `❌ Failed to create inventory item for product ${event.productId}:`,
-        error
+        error,
       );
       // Event in Dead-Letter-Queue einreihen
       await this.handleFailedEvent("product.created", event, error as Error);
@@ -147,7 +162,7 @@ export class InventorySyncHandler {
   }
 
   private async handleProductUpdated(
-    event: ProductUpdatedEvent
+    event: ProductUpdatedEvent,
   ): Promise<void> {
     try {
       const inventoryUpdate: any = {};
@@ -168,13 +183,13 @@ export class InventorySyncHandler {
     } catch (error) {
       console.error(
         `❌ Failed to update inventory item for product ${event.productId}:`,
-        error
+        error,
       );
     }
   }
 
   private async handleProductDeleted(
-    event: ProductDeletedEvent
+    event: ProductDeletedEvent,
   ): Promise<void> {
     try {
       await this.inventoryService.delete(event.productId);
@@ -182,7 +197,7 @@ export class InventorySyncHandler {
     } catch (error) {
       console.error(
         `❌ Failed to delete inventory item for product ${event.productId}:`,
-        error
+        error,
       );
     }
   }
@@ -200,7 +215,7 @@ export class InventorySyncHandler {
   private async handleFailedEvent(
     eventType: string,
     event: any,
-    error: Error
+    error: Error,
   ): Promise<void> {
     // Hier könnte man das Event in eine Warteschlange für spätere Verarbeitung einreihen
     console.error(`📋 Adding ${eventType} event to dead-letter-queue:`, {

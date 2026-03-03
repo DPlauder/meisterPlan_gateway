@@ -58,7 +58,7 @@ export interface ProductCreatedEvent {
   timestamp: Date;
   inventorySynced?: boolean;
 }
-
+//TODO - Muss noch implementiert werden, funktioniert noch nicht
 export interface ProductUpdatedEvent {
   productId: string;
   productData: {

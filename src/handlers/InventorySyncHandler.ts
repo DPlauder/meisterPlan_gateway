@@ -1,3 +1,4 @@
+import { response } from "express";
 import {
   ServiceEventBus,
   ProductCreatedEvent,
@@ -142,6 +143,7 @@ export class InventorySyncHandler {
       const inventoryItem = {
         productId: event.productId,
         articleNum: event.productId,
+        articleNumber: event.productId,
         name: event.productData.name,
         quantity: 0, // Initial-Bestand
         location: "Main Warehouse",

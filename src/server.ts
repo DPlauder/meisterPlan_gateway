@@ -1,8 +1,9 @@
 import { App } from "./App";
+import { env } from "./config/env";
 
 console.log("Starte Gateway...");
 
-const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const port = env.port;
 
 try {
   const appInstance = App.getInstance();

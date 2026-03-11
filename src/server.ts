@@ -1,8 +1,10 @@
 import { App } from "./App";
+// env statt direktem process.env.PORT: typisiert und einmalig validiert
 import { env } from "./config/env";
 
 console.log("Starte Gateway...");
 
+// Port kommt aus der zentralen Konfiguration – kein rohes process.env mehr nötig
 const port = env.port;
 
 try {
